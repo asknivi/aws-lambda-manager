@@ -5,6 +5,17 @@ const execSync = require('child_process').execSync;
 const fs = require('fs');
 const path = require('path');
 
+/* gets the latest version number for the lambda function */
+function getLambdaFunctionLastVersion(functionName) {
+    var output = JSON.parse(execSync(`aws lambda list-versions-by-function --region eu-central-1 --function-name ${functionName}`));
+    var latestVersionNumber = output.Versions[output.Versions.length-1].Version;
+    while(output.NextMarker) {
+        output = JSON.parse(execSync(`aws lambda list-versions-by-function --region eu-central-1 --function-name ${functionName} --marker ${output.NextMarker}`));
+        latestVersionNumber = output.Versions[output.Versions.length-1].Version;
+	}
+	return latestVersionNumber;
+}
+
 program
 	.option('-p, --profile <profile>', 'The local profile to use when deploying')
 	.option('-r, --region <region>', 'The region in which to deploy the function')
@@ -12,11 +23,13 @@ program
 
 var lambdaspec = program.args[0].trim();
 var stage = program.args[1].trim();
-var version = program.args[2].trim().replace("$","\$");
 
 //get the actual lambda spec
 var lambdaspecFullpath = fs.realpathSync(lambdaspec);
 lambdaspec = require(lambdaspecFullpath);
+
+// the version number will be dynamically generated
+var version = (program.args[2]) ? program.args[2].trim().replace("$","\$") : getLambdaFunctionLastVersion(lambdaspec.lambdaconfig.FunctionName);
 
 //set the profile object according to the profile and region settings
 var profile = program.profile ? `--profile ${program.profile}` : "";
@@ -59,11 +72,11 @@ if (create) {
 }
 
 //update the version history object with the stage info
-var lambdaspecPath = path.dirname(lambdaspecFullpath);
-var lambdaspecHistory = `${path.basename(lambdaspecFullpath, '.json')}-history.json`;
+// var lambdaspecPath = path.dirname(lambdaspecFullpath);
+// var lambdaspecHistory = `${path.basename(lambdaspecFullpath, '.json')}-history.json`;
 
-var history = JSON.parse(fs.readFileSync(path.join(lambdaspecPath,lambdaspecHistory)));
-history.aliases = history.aliases || {};
+// var history = JSON.parse(fs.readFileSync(path.join(lambdaspecPath,lambdaspecHistory)));
+// history.aliases = history.aliases || {};
 
 //if we did a create then simply create a new object for the stage in question and write
 //it out
@@ -71,21 +84,21 @@ history.aliases = history.aliases || {};
 //then we set the current version to the one that was requested and then if the 
 //the version history doesn't contain the current version requested we push it onto the
 //list
-if (create) {
-	history.aliases[stage] = {
-		current: version,
-		versions: [version]
-	}; 
-} else {
-	history.aliases[stage] = history.aliases[stage] || {current:"", versions:[]};
-	history.aliases[stage].current = version;
-	if (!history.aliases[stage].versions.includes(version))
-		history.aliases[stage].versions.push(version);
-}
+// if (create) {
+// 	history.aliases[stage] = {
+// 		current: version,
+// 		versions: [version]
+// 	}; 
+// } else {
+// 	history.aliases[stage] = history.aliases[stage] || {current:"", versions:[]};
+// 	history.aliases[stage].current = version;
+// 	if (!history.aliases[stage].versions.includes(version))
+// 		history.aliases[stage].versions.push(version);
+// }
 
-//now save the history object to file
-fs.writeFileSync(path.join(lambdaspecPath, lambdaspecHistory),
-					JSON.stringify(history, null, 2));
+// //now save the history object to file
+// fs.writeFileSync(path.join(lambdaspecPath, lambdaspecHistory),
+// 					JSON.stringify(history, null, 2));
 console.log(`Lambda stage '${stage}' set to point to version '${version}'`);
 
 process.exit(0);
