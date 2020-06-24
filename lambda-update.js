@@ -9,6 +9,7 @@ program
 	.option('-n, --skip-upload', 'Skip creating a local zip file and uploading to s3')
 	.option('-p, --profile <profile>', 'The local profile to use when deploying')
 	.option('-r, --region <region>', 'The region in which to deploy the function')
+	.option('-b, --bucket <bucketname>', 'The bucket to store the zip file in, should be in the deployment region (overrides value in profile)')
 	.parse(process.argv);
 
 //get the lambda spec path
@@ -22,7 +23,7 @@ lambdaspec = require(lambdaspecFullpath);
 
 var current_time = new Date().getTime();
 var zipfile = `${lambdaspec.zipfile}_${current_time}.zip`;
-var s3bucket = lambdaspec.s3bucket;
+var s3bucket =  program.bucket ? program.bucket : lambdaspec.s3bucket;
 var s3keyprefix = lambdaspec.s3keyprefix;
 var s3key = s3keyprefix + zipfile;
 
@@ -96,6 +97,21 @@ if (!program.skipUpload) {
 
 //update the lambda function and its configuration
 var lambdaconfig = lambdaspec.lambdaconfig;
+
+// query the deployed function arn
+console.log(`Getting function arn for selected region...`);
+try {
+	const response = execSync(`aws lambda get-function --function-name "${lambdaconfig.FunctionName}" ${profile}`);
+	const responseObj = JSON.parse(response);
+	if (response && response.Configuration)
+	console.log(`function arn is ${responseObj.Configuration.FunctionArn}`)
+	lambdaconfig.FunctionArn = responseObj.Configuration.FunctionArn;
+	lambdaspec.vpcconfig = responseObj.Configuration.VpcConfig;
+	delete lambdaspec.vpcconfig.VpcId;
+} catch (err) {
+	console.error(`Error getting arn for function "${lambdaconfig.FunctionName}"`);
+	// process.exit(1);
+}
 
 console.log(`Updating lambda function '${lambdaconfig.FunctionName}'...`);
 var updateRes = '';
