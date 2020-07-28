@@ -52,7 +52,7 @@ if (!program.skipUpload) {
 	//run an npm update to get the latest dependencies
 	console.log(`Updating package dependencies...`);
 	try {
-		execSync('npm update -S && npm update -D');
+		execSync('npm ci -S && npm ci -D');
 	} catch (err) {
 		console.error(`Error updating dependencies: ${err.message}`);
 		process.exit(1);
